@@ -11,15 +11,19 @@ Ext.define('CustomApp', {
                 itemId:'displayContainer'
             }
                 ],
+    appWorkspace : null,
+    appPrefName: 'buildList5',
+
                 
     launch: function() {
+        
+        this.appWorkspace = this.getContext().getWorkspaceRef();
+        console.log ('workspace ref', this.appWorkspace);
+        console.log('context',this.getContext());
         console.log("Loading App: Release Notes App");
-        console.log ('context',this.getContext());
         this.now= new Date();
         var tf = Ext.create('Rally.ui.TextField',
         {
-            //emptyText: Rally.util.DateTime.toIsoString(new Date(),true),
-            //setValue : this.now.toISOString(),
             itemId: 'tf'
         }
         );
@@ -41,9 +45,6 @@ Ext.define('CustomApp', {
             listeners: {
                 ready : function(rCB){
                     console.log('ready');
-                    console.log(rCB);
-                    console.log(rCB.getValue());
-                	console.log('container',this.down('#displayContainer'));
                     this.down('#controlsContainer').add(button);
                     this._onButtonClick();
                 },
@@ -62,20 +63,16 @@ Ext.define('CustomApp', {
     
     _onButtonClick: function(){
         console.log("Go fetch data.");
-        console.log('textfield',this.down('#tf'));
         var release=this.down('#relComboBox').getRecord().get('ObjectID');
         var that=this;
-        //var now=Rally.util.DateTime.toIsoString(new Date(),true);
-        //console.log(this.now);
         var startDate=this.down('#tf').getValue();
-        console.log('startDate', startDate);
-        console.log('now',this.now.toISOString());
+        
         Ext.create('Rally.data.lookback.SnapshotStore', {
                     listeners: {
                         load: function(store, data, success) {
                             console.log('loaded snapshots', data);
                             console.log('this',this);
-                            that._displayResults(store);
+                            that._fetchBuilds(store);
                         }
                     },
                     //scope : this,
@@ -134,10 +131,6 @@ Ext.define('CustomApp', {
                             value: 'Completed'
                         }
 
-
-                        
-                        
-
                     ],
                     context: 
                     {
@@ -150,23 +143,85 @@ Ext.define('CustomApp', {
         });
         
     },
-    _displayResults : function (myStore){
-        var displayGrid=Ext.create('Rally.ui.grid.Grid',{
-			id:'grid',
-			store: myStore,
-			title:'RELEASE NOTES',
-			columnCfgs: [
-							{text: 'Formatted ID', dataIndex : 'FormattedID'},
-							{text : 'Name', dataIndex : 'Name'},
-							{text
+    
+    _fetchBuilds : function (myStore){
+        // get pref value object and put into an array
+        
+        var buildPairs = null;
+        Rally.data.PreferenceManager.load({
+            workspace: this.appWorkspace,
+            filterByName: this.appPrefName,
+            success: function(pref) {
+                //console.log('loaded pref', pref, pref[this.appPrefName]);
+                var decodedPrefValue = Ext.JSON.decode(pref[this.appPrefName]);
+                this.appPrefValue = (decodedPrefValue === undefined) ? {} : decodedPrefValue;
+                console.log('decoded pref value', this.appPrefValue);
+                buildPairs=_.sortBy(this.appPrefValue,'date');
+                
+                console.log ('build Pairs',buildPairs);
+                
+                this._sortData(buildPairs,myStore);
+            },
+            scope: this
+        });
+    },
+    
+    _sortData : function(myBuilds,myStore){
+        
+        var customGridData = [];
+        
+        // loop through snapshots
+        myStore.each(function(snapshot) {
+            var buildNumber = null;
+            _.each(myBuilds,function (buildData){  
+                console.log (buildData.date, buildData.build);
+               if (snapshot.get('_ValidFrom')<buildData.date)
+                {
+                    buildNumber = buildData.build;
+                    console.log('item assigned to build');
+                    return false;
+                    
+                }
+            
+            });
+            
+            
+            customGridData.push({formattedId: snapshot.get('FormattedID'), name: snapshot.get('Name'), build: buildNumber });
+        }, this);
+        
+    var gridStore = Ext.create("Rally.data.custom.Store", {
+            data: customGridData,
+            storeId: 'gridStore',
+            columnCfgs: [
+                {
+                    text: 'Formatted ID', dataIndex: 'formattedId'
+                },
+                {
+                    text: 'Name', dataIndex: 'name'
+                },
+                {
+                    text: 'Build', dataIndex: 'build'
+                }
+                ]
+        });
+        this._displayGrid(customGridData);
+    },
 
+
+    _displayGrid: function(myStore) {
+        console.log('creating grid', myStore);
+        var displayGrid=Ext.create('Ext.grid.Panel',{
+			itemId:'grid',
+			store: Ext.data.StoreManager.lookup('gridStore'),
+			title:'RELEASE NOTES',
+			columns: [
+						{text: 'Formatted ID', dataIndex : 'formattedId', flex: 1},
+						{text : 'Name', dataIndex : 'name', flex: 5},
+						{text: 'Build', dataIndex: 'build', flex: 2}
 			],
 			
-			pagingToolbarCfg: {
-		        pageSizes: [40, 60, 80]
-			},
 			showPagingToolbar : false,
-			columnLines:true,
+			columnLines:true
 		});
 		this.down('#displayContainer').add(displayGrid);
     
