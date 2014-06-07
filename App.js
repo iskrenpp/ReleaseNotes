@@ -12,7 +12,7 @@ Ext.define('CustomApp', {
             }
                 ],
     appWorkspace : null,
-    appPrefName: 'buildList5',
+    appPrefName: 'buildList6',
 
                 
     launch: function() {
@@ -189,7 +189,7 @@ Ext.define('CustomApp', {
             customGridData.push({formattedId: snapshot.get('FormattedID'), name: snapshot.get('Name'), build: buildNumber });
         }, this);
         
-    var gridStore = Ext.create("Rally.data.custom.Store", {
+        var gridStore = Ext.create("Rally.data.custom.Store", {
             data: customGridData,
             storeId: 'gridStore',
             columnCfgs: [
